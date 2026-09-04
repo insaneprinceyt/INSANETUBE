@@ -1,0 +1,6 @@
+{
+  "name": "INSANETUBE",
+  "description": "Video streaming platform featuring video player, Shorts reels, subscriptions, search, comments, and library management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
