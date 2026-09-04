@@ -133,6 +133,21 @@ class TubeViewModel(application: Application) : AndroidViewModel(application) {
     val userUploadedVideos = repository.userUploadedVideos
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val removedVideoIds: StateFlow<List<String>> = repository.removedVideoIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _realUploadOpen = MutableStateFlow(false)
+    val realUploadOpen: StateFlow<Boolean> = _realUploadOpen.asStateFlow()
+
+    private val _shortMakerOpen = MutableStateFlow(false)
+    val shortMakerOpen: StateFlow<Boolean> = _shortMakerOpen.asStateFlow()
+
+    private val _liveStreamOpen = MutableStateFlow(false)
+    val liveStreamOpen: StateFlow<Boolean> = _liveStreamOpen.asStateFlow()
+
+    private val _reviewVideosOpen = MutableStateFlow(false)
+    val reviewVideosOpen: StateFlow<Boolean> = _reviewVideosOpen.asStateFlow()
+
     // User Accounts & Authentication State
     val allAccounts: StateFlow<List<UserAccountEntity>> = repository.allAccounts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -174,49 +189,54 @@ class TubeViewModel(application: Application) : AndroidViewModel(application) {
     private val _authSuccessMessage = MutableStateFlow<String?>(null)
     val authSuccessMessage: StateFlow<String?> = _authSuccessMessage.asStateFlow()
 
-    // All videos combined (base + user uploads + saved states)
+    // All videos combined (base + user uploads + saved states - removed fake videos)
     val allVideos: StateFlow<List<Video>> = combine(
         savedVideos,
         subscriptions,
-        userUploadedVideos
-    ) { saved, subs, uploads ->
+        userUploadedVideos,
+        removedVideoIds
+    ) { saved, subs, uploads, removedIds ->
         val savedMap = saved.associateBy { it.videoId }
         val subsMap = subs.associateBy { it.channelId }
+        val removedSet = removedIds.toSet()
 
-        val convertedUploads = uploads.map { u ->
+        val convertedUploads = uploads.filter { !it.isShort }.map { u ->
             Video(
                 id = u.id,
                 title = u.title,
                 channelId = "user_me",
-                channelName = "You (InsaneCreator)",
+                channelName = u.uploaderName,
                 channelAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120",
                 subscriberCount = "1.2K subscribers",
                 verified = false,
-                views = "0 views",
-                viewCount = 0L,
+                views = "1 view",
+                viewCount = 1L,
                 timeAgo = "Just now",
                 duration = u.duration,
                 durationSeconds = 180,
                 category = u.category,
                 description = u.description,
-                likesCount = "0",
-                likeNumber = 0,
+                likesCount = "1",
+                likeNumber = 1,
                 isLiked = false,
                 isDisliked = false,
                 isSavedWatchLater = false,
                 isDownloaded = false,
                 isSubscribed = true,
-                isShort = u.isShort,
+                isShort = false,
                 tags = listOf("Uploaded", u.category),
                 gradientStartHex = 0xFF7C1E1E,
                 gradientEndHex = 0xFF2A0A0A,
                 accentHex = 0xFFFF0033,
-                commentsCount = 0
+                commentsCount = 0,
+                videoUri = u.videoUri,
+                isRealVideo = u.isRealVideo,
+                isFake = u.isFake
             )
         }
 
         val allList = convertedUploads + repository.getAllVideos()
-        allList.map { v ->
+        val mapped = allList.map { v ->
             val savedState = savedMap[v.id]
             val subState = subsMap[v.channelId]
             v.copy(
@@ -227,6 +247,7 @@ class TubeViewModel(application: Application) : AndroidViewModel(application) {
                 isSubscribed = subState?.isSubscribed ?: v.isSubscribed
             )
         }
+        mapped.filter { it.id !in removedSet }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getAllVideos())
 
     // Dynamic Filtered Feed based on category
@@ -250,8 +271,34 @@ class TubeViewModel(application: Application) : AndroidViewModel(application) {
         res
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getAllVideos())
 
-    // All Shorts list
-    val allShorts: StateFlow<List<ShortItem>> = MutableStateFlow(repository.getAllShorts()).asStateFlow()
+    // All Shorts list (combines base shorts + user created shorts, and filters removed)
+    val allShorts: StateFlow<List<ShortItem>> = combine(
+        userUploadedVideos,
+        removedVideoIds
+    ) { uploads, removedIds ->
+        val removedSet = removedIds.toSet()
+        val userShorts = uploads.filter { it.isShort }.map { u ->
+            ShortItem(
+                id = u.id,
+                title = u.title,
+                channelName = u.uploaderName,
+                channelAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120",
+                subscriberCount = "1.2K",
+                likesCount = "12",
+                likeNumber = 12,
+                commentsCount = "4",
+                songTitle = u.soundTrack ?: "Original Audio - ${u.uploaderName}",
+                tags = if (u.tags.isNotBlank()) u.tags.split(" ") else listOf("#Shorts", "#INSANETUBE"),
+                gradientStartHex = 0xFF7C1E1E,
+                gradientEndHex = 0xFF2A0A0A,
+                videoUri = u.videoUri,
+                isReal = u.isRealVideo,
+                isFake = u.isFake
+            )
+        }
+        val combined = userShorts + repository.getAllShorts()
+        combined.filter { it.id !in removedSet }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getAllShorts())
 
     // All Channels
     val allChannels: StateFlow<List<Channel>> = combine(subscriptions) { subs ->
@@ -510,28 +557,149 @@ class TubeViewModel(application: Application) : AndroidViewModel(application) {
     // Upload / Create Dialog
     fun openUploadDialog(isShort: Boolean = false) {
         _createSheetOpen.value = false
-        _uploadIsShort.value = isShort
-        _uploadDialogOpen.value = true
+        if (isShort) {
+            _shortMakerOpen.value = true
+        } else {
+            _realUploadOpen.value = true
+        }
     }
 
-    fun closeUploadDialog() {
-        _uploadDialogOpen.value = false
+    fun setRealUploadOpen(open: Boolean) {
+        _createSheetOpen.value = false
+        _realUploadOpen.value = open
     }
 
-    fun submitUpload(title: String, description: String, category: String, duration: String) {
+    fun setShortMakerOpen(open: Boolean) {
+        _createSheetOpen.value = false
+        _shortMakerOpen.value = open
+    }
+
+    fun setLiveStreamOpen(open: Boolean) {
+        _createSheetOpen.value = false
+        _liveStreamOpen.value = open
+    }
+
+    fun setReviewVideosOpen(open: Boolean) {
+        _createSheetOpen.value = false
+        _reviewVideosOpen.value = open
+    }
+
+    fun submitRealUpload(
+        title: String,
+        description: String,
+        category: String,
+        duration: String,
+        videoUri: String?,
+        isRealVideo: Boolean
+    ) {
         viewModelScope.launch {
+            val account = currentAccount.value
             repository.uploadVideo(
                 title = title,
                 description = description,
                 category = category,
                 duration = duration,
-                isShort = _uploadIsShort.value
+                isShort = false,
+                videoUri = videoUri,
+                isRealVideo = isRealVideo,
+                isFake = !isRealVideo,
+                uploaderName = account?.name ?: "Channel Member",
+                uploaderHandle = account?.handle ?: "@member"
             )
-            _uploadDialogOpen.value = false
-            _downloadNotification.value = "Your video '${title.take(20)}...' has been published!"
+            _realUploadOpen.value = false
+            _downloadNotification.value = "Real Video '$title' has been published to your channel!"
             delay(3000)
             _downloadNotification.value = null
         }
+    }
+
+    fun submitShort(
+        title: String,
+        soundTrack: String,
+        tags: String,
+        videoUri: String?,
+        isReal: Boolean,
+        isFake: Boolean
+    ) {
+        viewModelScope.launch {
+            val account = currentAccount.value
+            repository.uploadVideo(
+                title = title,
+                description = tags,
+                category = "Shorts",
+                duration = "00:30",
+                isShort = true,
+                videoUri = videoUri,
+                isRealVideo = isReal,
+                isFake = isFake,
+                uploaderName = account?.name ?: "Channel Member",
+                uploaderHandle = account?.handle ?: "@member",
+                soundTrack = soundTrack,
+                tags = tags
+            )
+            _shortMakerOpen.value = false
+            _downloadNotification.value = if (isReal) "Real Short reel published!" else "Demo Short reel published!"
+            delay(3000)
+            _downloadNotification.value = null
+        }
+    }
+
+    fun publishLiveStreamVod(title: String, description: String, category: String, duration: String) {
+        viewModelScope.launch {
+            val account = currentAccount.value
+            repository.uploadVideo(
+                title = title,
+                description = description,
+                category = category,
+                duration = duration,
+                isShort = false,
+                videoUri = null,
+                isRealVideo = true,
+                isFake = false,
+                uploaderName = account?.name ?: "Channel Member",
+                uploaderHandle = account?.handle ?: "@member"
+            )
+            _downloadNotification.value = "Live Stream VOD '$title' published to your channel!"
+            delay(3000)
+            _downloadNotification.value = null
+        }
+    }
+
+    fun removeFakeVideo(videoId: String) {
+        viewModelScope.launch {
+            repository.removeFakeVideo(videoId)
+            _downloadNotification.value = "Video removed from feed."
+            delay(3000)
+            _downloadNotification.value = null
+        }
+    }
+
+    fun removeAllFakeVideos() {
+        viewModelScope.launch {
+            repository.removeAllFakeVideos()
+            _downloadNotification.value = "All sample & fake videos have been removed!"
+            delay(3000)
+            _downloadNotification.value = null
+        }
+    }
+
+    fun restoreVideo(videoId: String) {
+        viewModelScope.launch {
+            repository.restoreVideo(videoId)
+            _downloadNotification.value = "Video restored to feed."
+            delay(3000)
+            _downloadNotification.value = null
+        }
+    }
+
+    fun closeUploadDialog() {
+        _uploadDialogOpen.value = false
+        _realUploadOpen.value = false
+        _shortMakerOpen.value = false
+    }
+
+    fun submitUpload(title: String, description: String, category: String, duration: String) {
+        submitRealUpload(title, description, category, duration, null, true)
     }
 
     // Notifications & Cast & Share & Playlist
@@ -559,12 +727,12 @@ class TubeViewModel(application: Application) : AndroidViewModel(application) {
 
     // Shorts navigation
     fun nextShort() {
-        val total = repository.getAllShorts().size
+        val total = allShorts.value.size.coerceAtLeast(1)
         _currentShortIndex.value = (_currentShortIndex.value + 1) % total
     }
 
     fun prevShort() {
-        val total = repository.getAllShorts().size
+        val total = allShorts.value.size.coerceAtLeast(1)
         _currentShortIndex.value = if (_currentShortIndex.value - 1 >= 0) _currentShortIndex.value - 1 else total - 1
     }
 

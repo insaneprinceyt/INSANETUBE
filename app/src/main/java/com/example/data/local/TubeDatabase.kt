@@ -12,9 +12,10 @@ import androidx.room.RoomDatabase
         SubscriptionEntity::class,
         UserCommentEntity::class,
         UserUploadedVideoEntity::class,
-        UserAccountEntity::class
+        UserAccountEntity::class,
+        RemovedVideoEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class TubeDatabase : RoomDatabase() {

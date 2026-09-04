@@ -27,7 +27,10 @@ data class Video(
     val gradientStartHex: Long = 0xFF1E293B,
     val gradientEndHex: Long = 0xFF0F172A,
     val accentHex: Long = 0xFFFF0000,
-    val commentsCount: Int = 1240
+    val commentsCount: Int = 1240,
+    val videoUri: String? = null,
+    val isRealVideo: Boolean = false,
+    val isFake: Boolean = false
 )
 
 data class ShortItem(
@@ -45,7 +48,10 @@ data class ShortItem(
     val songTitle: String,
     val tags: List<String>,
     val gradientStartHex: Long,
-    val gradientEndHex: Long
+    val gradientEndHex: Long,
+    val videoUri: String? = null,
+    val isReal: Boolean = false,
+    val isFake: Boolean = false
 )
 
 data class Comment(

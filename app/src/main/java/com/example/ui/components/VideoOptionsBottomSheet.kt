@@ -21,10 +21,12 @@ import com.example.ui.theme.InsaneRed
 @Composable
 fun VideoOptionsBottomSheet(
     video: Video?,
+    isMember: Boolean = false,
     onDismiss: () -> Unit,
     onToggleWatchLater: (Video) -> Unit,
     onToggleDownload: (Video) -> Unit,
     onShareClick: () -> Unit,
+    onRemoveFakeVideo: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (video == null) return
@@ -48,6 +50,38 @@ fun VideoOptionsBottomSheet(
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+            // Member Moderation / Fake Video Action
+            if (video.isFake) {
+                if (isMember && onRemoveFakeVideo != null) {
+                    MenuRow(
+                        icon = Icons.Filled.Delete,
+                        label = "Remove fake video (Member Moderation)",
+                        tint = InsaneRed,
+                        onClick = {
+                            onRemoveFakeVideo(video.id)
+                            onDismiss()
+                        },
+                        testTag = "option_remove_fake_video"
+                    )
+                } else {
+                    MenuRow(
+                        icon = Icons.Outlined.Shield,
+                        label = "Demo/Sample Video (Sign in to remove)",
+                        tint = Color(0xFFF87171),
+                        onClick = onDismiss,
+                        testTag = "option_sample_flag"
+                    )
+                }
+            } else {
+                MenuRow(
+                    icon = Icons.Filled.Verified,
+                    label = "Verified Real Member Upload",
+                    tint = Color(0xFF34D399),
+                    onClick = onDismiss,
+                    testTag = "option_verified_real"
+                )
+            }
 
             // Save to Watch later
             MenuRow(

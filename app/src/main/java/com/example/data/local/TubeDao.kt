@@ -52,6 +52,22 @@ interface TubeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUploadedVideo(video: UserUploadedVideoEntity)
 
+    @Query("DELETE FROM user_uploaded_videos WHERE id = :id")
+    suspend fun deleteUploadedVideo(id: String)
+
+    // Removed / Filtered Fake Videos Moderation
+    @Query("SELECT videoId FROM removed_videos")
+    fun getRemovedVideoIds(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun markVideoRemoved(entity: RemovedVideoEntity)
+
+    @Query("DELETE FROM removed_videos WHERE videoId = :videoId")
+    suspend fun restoreVideo(videoId: String)
+
+    @Query("DELETE FROM removed_videos")
+    suspend fun clearRemovedVideos()
+
     // User Accounts & Authentication
     @Query("SELECT * FROM user_accounts ORDER BY createdTimestamp ASC")
     fun getAllAccounts(): Flow<List<UserAccountEntity>>

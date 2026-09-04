@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.net.Uri
+import android.widget.VideoView
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -27,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.model.Video
 import com.example.ui.theme.InsaneRed
 import kotlinx.coroutines.delay
@@ -283,25 +286,67 @@ private fun FullVideoPlayer(
                     .clickable { showControls = !showControls }
                     .testTag("video_player_viewport")
             ) {
-                // Background visualizer / dynamic cinematic gradient
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color(video.gradientStartHex),
-                                    Color(video.gradientEndHex)
+                // Real Video View or Background visualizer / dynamic cinematic gradient
+                if (video.videoUri != null) {
+                    AndroidView(
+                        factory = { ctx ->
+                            VideoView(ctx).apply {
+                                setVideoURI(Uri.parse(video.videoUri))
+                                setOnPreparedListener { mp ->
+                                    mp.isLooping = true
+                                    if (isPlaying) start()
+                                }
+                            }
+                        },
+                        update = { view ->
+                            if (isPlaying && !view.isPlaying) {
+                                view.start()
+                            } else if (!isPlaying && view.isPlaying) {
+                                view.pause()
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color(video.gradientStartHex),
+                                        Color(video.gradientEndHex)
+                                    )
                                 )
                             )
-                        )
-                ) {
-                    // Animated audio bars in center representing live stream / playing video
-                    if (isPlaying) {
-                        AnimatedAudioBars(
-                            color = Color(video.accentHex).copy(alpha = 0.5f),
-                            modifier = Modifier.align(Alignment.Center)
-                        )
+                    ) {
+                        // Animated audio bars in center representing live stream / playing video
+                        if (isPlaying) {
+                            AnimatedAudioBars(
+                                color = Color(video.accentHex).copy(alpha = 0.5f),
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+                }
+
+                // Real Member Video Badge
+                if (video.isRealVideo || video.videoUri != null) {
+                    Surface(
+                        color = Color(0xFF10B981).copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Verified, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("REAL VIDEO", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 

@@ -328,6 +328,9 @@ class TubeRepository(private val dao: TubeDao) {
     // User Uploaded videos Flow
     val userUploadedVideos: Flow<List<UserUploadedVideoEntity>> = dao.getUserUploadedVideos()
 
+    // Removed / Filtered Fake Video IDs Flow
+    val removedVideoIds: Flow<List<String>> = dao.getRemovedVideoIds()
+
     // Comments for video Flow (merges initial comments with Room comments)
     fun getCommentsForVideo(videoId: String): Flow<List<Comment>> {
         val initial = getInitialComments(videoId)
@@ -434,7 +437,14 @@ class TubeRepository(private val dao: TubeDao) {
         description: String,
         category: String,
         duration: String,
-        isShort: Boolean
+        isShort: Boolean,
+        videoUri: String? = null,
+        isRealVideo: Boolean = true,
+        isFake: Boolean = false,
+        uploaderName: String = "Channel Member",
+        uploaderHandle: String = "@member",
+        soundTrack: String? = null,
+        tags: String = ""
     ) {
         dao.insertUploadedVideo(
             UserUploadedVideoEntity(
@@ -443,13 +453,43 @@ class TubeRepository(private val dao: TubeDao) {
                 description = description,
                 category = category,
                 duration = duration,
-                isShort = isShort
+                isShort = isShort,
+                videoUri = videoUri,
+                isRealVideo = isRealVideo,
+                isFake = isFake,
+                uploaderName = uploaderName,
+                uploaderHandle = uploaderHandle,
+                soundTrack = soundTrack,
+                tags = tags,
+                timestamp = System.currentTimeMillis()
             )
         )
     }
 
-    fun getAllVideos(): List<Video> = baseVideos
-    fun getAllShorts(): List<ShortItem> = baseShorts
+    suspend fun removeFakeVideo(videoId: String) {
+        dao.markVideoRemoved(RemovedVideoEntity(videoId = videoId))
+        dao.deleteUploadedVideo(videoId)
+    }
+
+    suspend fun removeAllFakeVideos() {
+        baseVideos.forEach { v ->
+            dao.markVideoRemoved(RemovedVideoEntity(videoId = v.id))
+        }
+        baseShorts.forEach { s ->
+            dao.markVideoRemoved(RemovedVideoEntity(videoId = s.id))
+        }
+    }
+
+    suspend fun restoreVideo(videoId: String) {
+        dao.restoreVideo(videoId)
+    }
+
+    suspend fun clearRemovedVideos() {
+        dao.clearRemovedVideos()
+    }
+
+    fun getAllVideos(): List<Video> = baseVideos.map { it.copy(isFake = true, isRealVideo = false) }
+    fun getAllShorts(): List<ShortItem> = baseShorts.map { it.copy(isFake = true, isReal = false) }
     fun getAllChannels(): List<Channel> = baseChannels
     fun getAllPlaylists(): List<Playlist> = basePlaylists
 

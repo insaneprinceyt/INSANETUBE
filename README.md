@@ -23,10 +23,3 @@ Every time changes are pushed to this GitHub repository, GitHub Actions automati
 ```
 The output APK will be generated at:
 `app/build/outputs/apk/debug/app-debug.apk`
-
----
-
-## 👑 Channel Owner Credentials
-- **Email**: `insaneprinceyt@gmail.com`
-- **Password**: `PRINCE_GAMING69`
-- **Channel**: `@Itz_PrinceYT` (Verified Creator Blue Tick & 18.5M Subscribers)

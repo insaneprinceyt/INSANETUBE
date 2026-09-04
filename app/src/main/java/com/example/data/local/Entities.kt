@@ -49,7 +49,20 @@ data class UserUploadedVideoEntity(
     val category: String,
     val duration: String,
     val isShort: Boolean,
+    val videoUri: String? = null,
+    val isRealVideo: Boolean = true,
+    val isFake: Boolean = false,
+    val uploaderName: String = "Channel Member",
+    val uploaderHandle: String = "@member",
+    val soundTrack: String? = null,
+    val tags: String = "",
     val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "removed_videos")
+data class RemovedVideoEntity(
+    @PrimaryKey val videoId: String,
+    val removedTimestamp: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "user_accounts")

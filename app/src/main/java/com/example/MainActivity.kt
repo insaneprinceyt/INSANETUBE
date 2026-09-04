@@ -84,6 +84,12 @@ fun InsaneTubeApp(
     val isIncognito by viewModel.isIncognito.collectAsStateWithLifecycle()
     val currentShortIndex by viewModel.currentShortIndex.collectAsStateWithLifecycle()
 
+    // Real Upload, Short Maker, Live Stream, and Moderation states
+    val realUploadOpen by viewModel.realUploadOpen.collectAsStateWithLifecycle()
+    val shortMakerOpen by viewModel.shortMakerOpen.collectAsStateWithLifecycle()
+    val liveStreamOpen by viewModel.liveStreamOpen.collectAsStateWithLifecycle()
+    val reviewVideosOpen by viewModel.reviewVideosOpen.collectAsStateWithLifecycle()
+
     // Auth & Accounts State
     val currentAccount by viewModel.currentAccount.collectAsStateWithLifecycle()
     val allAccounts by viewModel.allAccounts.collectAsStateWithLifecycle()
@@ -112,8 +118,10 @@ fun InsaneTubeApp(
     val categories = listOf("All", "Gaming", "Music", "Tech", "Podcasts", "Comedy", "Trending", "Live")
 
     // Handle Back Press
-    BackHandler(enabled = channelScreenOpen || isPlayerExpanded || isSearchActive || currentTab != NavTab.HOME) {
+    BackHandler(enabled = liveStreamOpen || reviewVideosOpen || channelScreenOpen || isPlayerExpanded || isSearchActive || currentTab != NavTab.HOME) {
         when {
+            liveStreamOpen -> viewModel.setLiveStreamOpen(false)
+            reviewVideosOpen -> viewModel.setReviewVideosOpen(false)
             channelScreenOpen -> viewModel.closeChannelScreen()
             isSearchActive -> viewModel.closeSearch()
             isPlayerExpanded -> viewModel.collapsePlayer()
@@ -356,23 +364,64 @@ fun InsaneTubeApp(
         // Create (+) Action Bottom Sheet
         if (createSheetOpen) {
             CreateOptionsSheet(
+                currentAccount = currentAccount,
                 onDismiss = { viewModel.setCreateSheetOpen(false) },
-                onCreateShortClick = { viewModel.openUploadDialog(isShort = true) },
-                onUploadVideoClick = { viewModel.openUploadDialog(isShort = false) },
-                onGoLiveClick = {
-                    viewModel.setCreateSheetOpen(false)
-                    Toast.makeText(context, "Streaming hardware initialized. Ready to go live!", Toast.LENGTH_SHORT).show()
+                onCreateShortClick = { viewModel.setShortMakerOpen(true) },
+                onUploadVideoClick = { viewModel.setRealUploadOpen(true) },
+                onGoLiveClick = { viewModel.setLiveStreamOpen(true) },
+                onReviewVideosClick = { viewModel.setReviewVideosOpen(true) },
+                onSignInClick = { viewModel.openAuthSheet() }
+            )
+        }
+
+        // Real Video Upload Dialog (picks real device videos)
+        if (realUploadOpen) {
+            RealVideoUploadDialog(
+                currentAccount = currentAccount,
+                onDismiss = { viewModel.setRealUploadOpen(false) },
+                onSubmit = { title, desc, cat, dur, uri, isReal ->
+                    viewModel.submitRealUpload(title, desc, cat, dur, uri, isReal)
                 }
             )
         }
 
-        // Upload Video / Short Dialog
-        if (uploadDialogOpen) {
-            UploadVideoDialog(
-                isShort = uploadIsShort,
-                onDismiss = { viewModel.closeUploadDialog() },
-                onSubmit = { title, desc, cat, dur ->
-                    viewModel.submitUpload(title, desc, cat, dur)
+        // Real & Fake Short Reel Maker Dialog
+        if (shortMakerOpen) {
+            ShortMakerDialog(
+                currentAccount = currentAccount,
+                onDismiss = { viewModel.setShortMakerOpen(false) },
+                onSubmit = { title, soundTrack, tags, uri, isReal, isFake ->
+                    viewModel.submitShort(title, soundTrack, tags, uri, isReal, isFake)
+                }
+            )
+        }
+
+        // Real Camera Live Streaming Screen
+        if (liveStreamOpen) {
+            LiveStreamScreen(
+                currentAccount = currentAccount,
+                onClose = { viewModel.setLiveStreamOpen(false) },
+                onPublishVod = { title, desc, cat, dur ->
+                    viewModel.publishLiveStreamVod(title, desc, cat, dur)
+                }
+            )
+        }
+
+        // Review & Moderate Fake Videos Sheet (Members Only)
+        if (reviewVideosOpen) {
+            VideoReviewSheet(
+                allVideos = allVideos,
+                currentAccount = currentAccount,
+                onDismiss = { viewModel.setReviewVideosOpen(false) },
+                onRemoveVideo = { videoId ->
+                    viewModel.removeFakeVideo(videoId)
+                },
+                onRemoveAllFakeVideos = {
+                    viewModel.removeAllFakeVideos()
+                },
+                onSignInClick = {
+                    viewModel.setReviewVideosOpen(false)
+                    viewModel.openAuthSheet()
                 }
             )
         }
@@ -406,10 +455,14 @@ fun InsaneTubeApp(
         if (videoOptionsSheetOpen) {
             VideoOptionsBottomSheet(
                 video = selectedVideoForMenu,
+                isMember = currentAccount != null,
                 onDismiss = { viewModel.closeVideoOptions() },
                 onToggleWatchLater = { viewModel.toggleWatchLater(it) },
                 onToggleDownload = { viewModel.toggleDownload(it) },
-                onShareClick = { viewModel.setShareSheetOpen(true) }
+                onShareClick = { viewModel.setShareSheetOpen(true) },
+                onRemoveFakeVideo = { videoId ->
+                    viewModel.removeFakeVideo(videoId)
+                }
             )
         }
 
